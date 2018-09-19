@@ -1,0 +1,65 @@
+#!/usr/bin/env bash
+
+#sudo apt-get -y install yad
+#sudo chmod g+w /sys/class/rtc/rtc0/wakealarm /sys/power/state
+#sudo chgrp sudo /sys/class/rtc/rtc0/wakealarm /sys/power/state
+#ls -l /sys/class/rtc/rtc0/wakealarm /sys/power/state
+
+: ${CHECK_INTERVAL:=$[60*5]}
+: ${TIMEOUT:=60}
+: ${HIBERNATE_PERCENTAGE:=10}
+: ${ASK_HIBERNATE_PERCENTAGE:=25}
+
+: ${BATTERY_DEVICE:=BAT0}
+
+function battery_state {
+  GAWK="match(\$0, / +state: +([A-Za-z0-9]+)/, ary) { print ary[1] }"
+
+  upower -i /org/freedesktop/UPower/devices/battery_${BATTERY_DEVICE} | gawk "$GAWK"
+}
+
+function battery_percentage {
+  GAWK="match(\$0, / +percentage: +([0-9]+)\%/, ary) { print ary[1] }"
+
+  upower -i /org/freedesktop/UPower/devices/battery_${BATTERY_DEVICE} | gawk "$GAWK"
+}
+
+function suspend_hibernate() {
+  #systemctl suspend_hibernate-then-hibernate -i
+   /lib/systemd/systemd-sleep suspend_hibernate-then-hibernate
+}
+
+function ask() {
+  yad --image "dialog-question" --title "Suspend system?" \
+    --text="Suspend the system? \nThis dialog will timeout in 60 seconds, after which the system will suspend_hibernate." \
+    --button=CANCEL:1 --button=OK:2 \
+    --timeout=$TIMEOUT --timeout-indicator=bottom --center --on-top --sticky
+
+
+  if [[ $? -eq 1 ]]; then
+    # user clicked Cancel
+    return $rc
+  else
+    # user clicked Ok or dialog timed out ($? resp. equals 2 and 60)
+    # Lock screen and go into suspend_hibernate (hybrid)
+    suspend_hibernate && return $rc
+    #gnome-screensaver-command -l && sudo pm-suspend_hibernate-hybrid && exit $rc
+  fi
+}
+
+while :; do
+  if [ $(battery_state) == "discharging" ]; then
+    if [ $(battery_percentage) -lt $HIBERNATE_PERCENTAGE ]; then
+      suspend_hibernate
+    elif [ $(battery_percentage) -lt $ASK_HIBERNATE_PERCENTAGE ]; then
+      if [ ! "$ASKED" ]; then
+        ask
+        ASKED=Yes
+      fi
+    fi
+  else
+    ASKED=
+  fi
+
+  sleep $CHECK_INTERVAL
+done

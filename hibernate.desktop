@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Exec=$HOME/.auto-hibernate/hibernate
+Hidden=false
+NoDisplay=false
+X-GNOME-Autostart-enabled=true
+Name[en]=Auto hibernate
+Name=Auto hibernate
+Comment[en]=When battery reaches a low level asks the end user if the system should be suspended
+Comment=
